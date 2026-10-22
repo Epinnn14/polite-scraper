@@ -59,16 +59,37 @@ class PoliteFetcher:
             self.log(f"CACHE HIT {url} ({len(html):,} chars)")
             return Page(url, html, from_cache=True, fetched_at=_iso(cached.stat().st_mtime))
 
-        wait = self.delay - (time.monotonic() - self._last_request)
-        if wait > 0:
-            time.sleep(wait)
-        self._last_request = time.monotonic()
-        resp = self.session.get(url, timeout=TIMEOUT_SECONDS)
-        if resp.status_code != 200:
-            raise FetchError(url, f"HTTP {resp.status_code}", resp.status_code)
+        resp = self._request_with_one_retry(url)
         resp.encoding = "utf-8"
         html = resp.text
         cached.write_text(html, encoding="utf-8")
         self.stats["pages_fetched"] += 1
         self.log(f"FETCH {resp.status_code} {url} ({len(html):,} chars)")
         return Page(url, html, from_cache=False, fetched_at=_iso(time.time()))
+
+    def _polite_get(self, url: str):
+        wait = self.delay - (time.monotonic() - self._last_request)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_request = time.monotonic()
+        return self.session.get(url, timeout=TIMEOUT_SECONDS)
+
+    def _request_with_one_retry(self, url: str):
+        """Retry ONCE on a timeout / connection error / 5xx. Never retry 4xx:
+        404 = the page does not exist (asking again won't create it), 403 = the site said no."""
+        for attempt in (1, 2):
+            try:
+                resp = self._polite_get(url)
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                if attempt == 2:
+                    raise FetchError(url, f"network error: {type(exc).__name__}") from exc
+                self.log(f"RETRY {url} after {type(exc).__name__}")
+                time.sleep(2)
+                continue
+            if resp.status_code == 200:
+                return resp
+            if 500 <= resp.status_code < 600 and attempt == 1:
+                self.log(f"RETRY {url} after HTTP {resp.status_code}")
+                time.sleep(2)
+                continue
+            raise FetchError(url, f"HTTP {resp.status_code}", resp.status_code)
