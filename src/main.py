@@ -2,10 +2,14 @@
 
 Run from this folder:  python -m src.main
 """
+from .fetch import PoliteFetcher
+
+START_URL = "https://books.toscrape.com/catalogue/page-1.html"
 
 
 def main() -> None:
-    print("Target: https://books.toscrape.com (a scraping sandbox). See README → Target classification.")
+    fetcher = PoliteFetcher("cache")
+    fetcher.get(START_URL)
 
 
 if __name__ == "__main__":
