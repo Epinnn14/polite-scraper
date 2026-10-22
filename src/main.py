@@ -4,7 +4,11 @@ Run from this folder:  python -m src.main
 """
 from .fetch import PoliteFetcher
 import json
+from pathlib import Path
 
+from pydantic import ValidationError
+
+from .models import Book, normalize
 from .parse import book_links, book_record, next_page
 
 START_URL = "https://books.toscrape.com/catalogue/page-1.html"
@@ -35,11 +39,32 @@ def extract(fetcher: PoliteFetcher, urls: list[str], source: dict[str, str]) -> 
     return records
 
 
+def validate(records: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Normalise + validate every record. Good ones are de-duplicated by product_url; bad ones keep their reason."""
+    good: dict[str, dict] = {}
+    bad: list[dict] = []
+    for raw in records:
+        try:
+            book = Book.model_validate(normalize(raw))
+        except ValidationError as exc:
+            bad.append({"product_url": raw.get("product_url"), "reason": exc.errors(include_url=False), "raw": raw})
+            continue
+        good.setdefault(book.product_url, book.model_dump())
+    return list(good.values()), bad
+
+
+def write_json(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     fetcher = PoliteFetcher("cache")
     urls, source = discover(fetcher)
-    records = extract(fetcher, urls, source)
-    print(json.dumps(records[0], indent=2, ensure_ascii=False))
+    books, errors = validate(extract(fetcher, urls, source))
+    write_json(Path("output/books.json"), books)      # overwritten each run → same 60 records, never 120
+    write_json(Path("output/errors.json"), errors)
+    print(f"valid_records={len(books)} invalid_records={len(errors)}")
 
 
 if __name__ == "__main__":
