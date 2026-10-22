@@ -3,7 +3,9 @@
 Run from this folder:  python -m src.main
 """
 from .fetch import PoliteFetcher
-from .parse import book_links, next_page
+import json
+
+from .parse import book_links, book_record, next_page
 
 START_URL = "https://books.toscrape.com/catalogue/page-1.html"
 MAX_CATALOGUE_PAGES = 3
@@ -24,8 +26,20 @@ def discover(fetcher: PoliteFetcher) -> tuple[list[str], dict[str, str]]:
     return unique, source
 
 
+def extract(fetcher: PoliteFetcher, urls: list[str], source: dict[str, str]) -> list[dict]:
+    records = []
+    for url in urls:
+        page = fetcher.get(url)
+        records.append(book_record(page.html, url, source.get(url, ""), page.fetched_at))
+    print(f"detail_pages={len(records)}")
+    return records
+
+
 def main() -> None:
-    discover(PoliteFetcher("cache"))
+    fetcher = PoliteFetcher("cache")
+    urls, source = discover(fetcher)
+    records = extract(fetcher, urls, source)
+    print(json.dumps(records[0], indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

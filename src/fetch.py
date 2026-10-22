@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -25,6 +26,11 @@ class Page:
     url: str
     html: str
     from_cache: bool
+    fetched_at: str  # when the HTML actually came from the site (provenance), ISO-8601 UTC
+
+
+def _iso(ts: float) -> str:
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def cache_name(url: str) -> str:
@@ -51,7 +57,7 @@ class PoliteFetcher:
             html = cached.read_text(encoding="utf-8")
             self.stats["cache_hits"] += 1
             self.log(f"CACHE HIT {url} ({len(html):,} chars)")
-            return Page(url, html, from_cache=True)
+            return Page(url, html, from_cache=True, fetched_at=_iso(cached.stat().st_mtime))
 
         wait = self.delay - (time.monotonic() - self._last_request)
         if wait > 0:
@@ -65,4 +71,4 @@ class PoliteFetcher:
         cached.write_text(html, encoding="utf-8")
         self.stats["pages_fetched"] += 1
         self.log(f"FETCH {resp.status_code} {url} ({len(html):,} chars)")
-        return Page(url, html, from_cache=False)
+        return Page(url, html, from_cache=False, fetched_at=_iso(time.time()))
