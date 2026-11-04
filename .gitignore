@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 # raw HTML cache: re-creatable, never committed
 cache/
+# local state for change detection (re-created on every run)
+output/fingerprints.json

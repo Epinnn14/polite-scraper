@@ -70,10 +70,55 @@ description: str | null          (some books have none; never invented)
 
 ## Run report (proof)
 
-<!-- TODO before submitting: paste the output/run-report.json from your first real run here, and commit output/books.json + output/run-report.json as the sample output. -->
+Real run on 2026-11-04 from a Windows laptop, with an empty cache (`rmdir /s /q cache`, then `python -m src.main`):
 
-The failure test (`python -m src.main --inject-fake-url`) adds one made-up book URL. The run still finishes, `books.json`
-still has 60 records, and the report shows `"failed_pages": 1`.
+```text
+FETCH 200 https://books.toscrape.com/catalogue/page-1.html (50,449 chars)
+FETCH 200 https://books.toscrape.com/catalogue/page-2.html (50,853 chars)
+FETCH 200 https://books.toscrape.com/catalogue/page-3.html (51,354 chars)
+catalogue_pages=3 discovered=60 unique_urls=60
+FETCH 200 https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html (9,275 chars)
+… 59 more detail pages, all 200 …
+detail_pages=60 failed_pages=0
+```
+
+`output/run-report.json`:
+
+```json
+{
+  "started_at": "2026-11-04T08:32:55Z",
+  "duration_seconds": 38.55,
+  "catalogue_pages": 3,
+  "pages_fetched": 63,
+  "cache_hits": 0,
+  "valid_records": 60,
+  "invalid_records": 0,
+  "failed_pages": 0,
+  "changes_since_last_run": {
+    "new": 0,
+    "changed": 0,
+    "unchanged": 60,
+    "gone": 0
+  },
+  "failures": []
+}
+```
+
+That's 63 real requests in 38.6 s, about 0.6 s apart, which is the politeness delay at work. All 60 records passed the
+schema. The sample output is committed: [`output/books.json`](output/books.json),
+[`output/books.csv`](output/books.csv) and [`output/run-report.json`](output/run-report.json).
+
+**Run it again** and it reads `cache/` instead: `pages_fetched: 0` and `cache_hits: 63` (a cache-only run took 1.6 s), and
+`changes_since_last_run` shows all 60 as `unchanged`.
+
+**The failure test** (`python -m src.main --inject-fake-url`) adds one made-up book URL. The run still finishes,
+`books.json` still has 60 records, and the 404 is reported, not retried:
+
+```json
+"valid_records": 60,
+"failed_pages": 1,
+"failures": [{"url": "https://books.toscrape.com/catalogue/this-book-does-not-exist_0/index.html", "error": "HTTP 404"}]
+```
 
 ## Why no browser
 
@@ -99,5 +144,4 @@ Built **with an AI assistant (Claude)**, and stated openly here. Verified by run
 
 - the 8 offline tests
 - parsing a real page saved from books.toscrape.com (`tests/fixtures/`)
-
-The live run against the site has to be done on a machine that can reach it. Its report goes in the section above.
+- the live runs above (fresh, cached, and with an injected failure)
